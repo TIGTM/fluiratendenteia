@@ -1,0 +1,72 @@
+{
+  "name": "Fluir Atendente IA - Relatório diário",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 18 * * *" }] } },
+      "id": "schedule-daily",
+      "name": "Todo dia 18h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.APP_URL}}/api/n8n/reports/daily",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }] },
+        "options": {}
+      },
+      "id": "get-report",
+      "name": "Buscar relatório",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reports = $json.reports || [];\nconst lines = reports.map(r => `Empresa: ${r.companyName}\\nRecebidas: ${r.inboundMessages}\\nEnviadas: ${r.outboundMessages}\\nLeads novos: ${r.newLeads}\\nAguardando humano: ${r.waitingHuman}\\nIntenção de agendamento: ${r.bookingIntent}\\nConvertidos: ${r.converted}\\nPrincipais perguntas: ${(r.topQuestions || []).join(' | ')}`).join('\\n\\n');\nreturn [{ json: { date: $json.date, summary: `Relatório diário Fluir Atendente IA - ${$json.date}\\n\\n${lines || 'Sem movimentação hoje.'}` } }];"
+      },
+      "id": "summary",
+      "name": "Gerar resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.APP_URL}}/api/n8n/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ level: 'info', source: 'n8n-report', message: 'Relatório diário gerado', metadata: $json })}}",
+        "options": {}
+      },
+      "id": "log-report",
+      "name": "Registrar log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Estrutura pronta para expansão com SMTP ou endpoint interno de e-mail.\n// Configure SMTP no app ou adicione um HTTP Request para uma rota /api/n8n/email/send.\nreturn [{ json: { ok: true, emailReady: Boolean($env.SMTP_HOST), summary: $('Gerar resumo').item.json.summary } }];"
+      },
+      "id": "email-placeholder",
+      "name": "Pronto para e-mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 0]
+    }
+  ],
+  "connections": {
+    "Todo dia 18h": { "main": [[{ "node": "Buscar relatório", "type": "main", "index": 0 }]] },
+    "Buscar relatório": { "main": [[{ "node": "Gerar resumo", "type": "main", "index": 0 }]] },
+    "Gerar resumo": { "main": [[{ "node": "Registrar log", "type": "main", "index": 0 }]] },
+    "Registrar log": { "main": [[{ "node": "Pronto para e-mail", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "versionId": "1"
+}

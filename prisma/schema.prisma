@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ativo
+  inativo
+}
+
+enum PlanType {
+  inicial
+  profissional
+  premium
+}
+
+enum LeadStatus {
+  novo
+  em_atendimento
+  aguardando_humano
+  orcamento_enviado
+  agendamento_solicitado
+  agendado
+  perdido
+  convertido
+  optout
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum LogLevel {
+  info
+  warn
+  error
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ClientCompany {
+  id                  String                @id @default(cuid())
+  companyName         String
+  responsibleName     String
+  email               String
+  phone               String
+  segment             String
+  connectedWhatsapp   String?
+  wahaSessionName     String                @unique
+  status              TenantStatus          @default(ativo)
+  plan                PlanType              @default(inicial)
+  voiceTone           String
+  humanHours          String?
+  welcomeMessage      String
+  outOfHoursMessage   String?
+  internalInstructions String?
+  instagramUrl        String?
+  websiteUrl          String?
+  notes               String?
+  knowledgeBaseItems  KnowledgeBaseItem[]
+  serviceItems        ServiceItem[]
+  leads               Lead[]
+  messages            ConversationMessage[]
+  followUps           FollowUp[]
+  logs                SystemLog[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+}
+
+model KnowledgeBaseItem {
+  id        String        @id @default(cuid())
+  tenantId  String
+  tenant    ClientCompany @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String
+  category  String?
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model ServiceItem {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      ClientCompany @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       String?
+  duration    String?
+  notes       String?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Lead {
+  id              String                @id @default(cuid())
+  tenantId        String
+  tenant          ClientCompany         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String?
+  phone           String
+  interest        String?
+  status          LeadStatus            @default(novo)
+  origin          String                @default("whatsapp")
+  lastMessage     String?
+  nextFollowUpAt  DateTime?
+  humanPaused     Boolean               @default(false)
+  followUpCount   Int                   @default(0)
+  messages        ConversationMessage[]
+  followUps       FollowUp[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([tenantId, phone])
+}
+
+model ConversationMessage {
+  id             String           @id @default(cuid())
+  tenantId       String
+  tenant         ClientCompany    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId         String?
+  lead           Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  contactPhone   String
+  contactName    String?
+  direction      MessageDirection
+  content        String
+  detectedIntent String?
+  answeredByAi   Boolean          @default(false)
+  needsHuman     Boolean          @default(false)
+  rawPayload      Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model FollowUp {
+  id          String        @id @default(cuid())
+  tenantId    String
+  tenant      ClientCompany @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId      String
+  lead        Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  message     String
+  dueAt       DateTime
+  sentAt      DateTime?
+  status      String        @default("pending")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model SystemLog {
+  id        String        @id @default(cuid())
+  tenantId  String?
+  tenant    ClientCompany? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  level     LogLevel       @default(info)
+  source    String
+  message   String
+  metadata  Json?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}

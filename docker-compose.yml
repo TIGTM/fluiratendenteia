@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fluir-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fluir
+      POSTGRES_PASSWORD: fluir
+      POSTGRES_DB: fluir_atendente_ia
+    ports:
+      - "5432:5432"
+    volumes:
+      - fluir_postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: fluir-atendente-ia
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://fluir:fluir@postgres:5432/fluir_atendente_ia?schema=public
+    ports:
+      - "3000:3000"
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: fluir-n8n
+    restart: unless-stopped
+    profiles: ["automation"]
+    ports:
+      - "5678:5678"
+    environment:
+      APP_URL: http://app:3000
+      N8N_INTERNAL_TOKEN: ${N8N_INTERNAL_TOKEN}
+      WAHA_BASE_URL: http://waha:3000
+      WAHA_SESSION: ${WAHA_SESSION:-default}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - fluir_n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows
+
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: fluir-waha
+    restart: unless-stopped
+    profiles: ["automation"]
+    ports:
+      - "3001:3000"
+    environment:
+      WHATSAPP_HOOK_URL: http://n8n:5678/webhook/atendente-ia/inbound
+      WHATSAPP_HOOK_EVENTS: message
+
+volumes:
+  fluir_postgres_data:
+  fluir_n8n_data:
