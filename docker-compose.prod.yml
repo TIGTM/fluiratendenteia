@@ -50,6 +50,8 @@ services:
     profiles: ["waha"]
     environment:
       WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-admin}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
       WHATSAPP_HOOK_URL: https://n8n.gtmalimentos.com.br/webhook/atendente-ia/inbound
       WHATSAPP_HOOK_EVENTS: message
     ports:
