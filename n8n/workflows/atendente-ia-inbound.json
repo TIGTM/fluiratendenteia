@@ -169,7 +169,7 @@
             },
             {
               "name": "X-Api-Key",
-              "value": "={{.WAHA_API_KEY}}"
+              "value": "={{$env.WAHA_API_KEY}}"
             }
           ]
         },
