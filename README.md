@@ -133,7 +133,7 @@ nano .env
 docker compose -f docker-compose.prod.yml up -d --build postgres app
 ```
 
-Depois configure o proxy reverso para `127.0.0.1:3000` e emita SSL para `atendenteia.fluirtecnologia.com.br`.
+Depois configure o proxy reverso para `127.0.0.1:3010` e emita SSL para `atendenteia.fluirtecnologia.com.br`.
 
 O healthcheck do app fica em:
 

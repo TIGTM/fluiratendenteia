@@ -34,7 +34,7 @@ services:
         condition: service_healthy
     command: sh -c "npx prisma migrate deploy && npm run start"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${APP_PORT:-3010}:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
       interval: 30s
@@ -52,7 +52,7 @@ services:
       WHATSAPP_HOOK_URL: https://n8n.gtmalimentos.com.br/webhook/atendente-ia/inbound
       WHATSAPP_HOOK_EVENTS: message
     ports:
-      - "3001:3000"
+      - "127.0.0.1:${WAHA_PORT:-3011}:3000"
     volumes:
       - fluir_waha_sessions:/app/.sessions
     networks:
@@ -65,4 +65,3 @@ volumes:
 networks:
   fluir_atendente:
     name: fluir_atendente
-

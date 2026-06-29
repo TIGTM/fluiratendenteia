@@ -43,12 +43,12 @@ docker compose -f docker-compose.prod.yml logs -f app
 Testar saúde:
 
 ```bash
-curl http://localhost:3000/api/health
+curl http://localhost:3010/api/health
 ```
 
 ## 3. Nginx e HTTPS
 
-Crie um proxy reverso para `127.0.0.1:3000`.
+Crie um proxy reverso para `127.0.0.1:3010`.
 
 Exemplo:
 
@@ -109,4 +109,3 @@ admin123
 ```
 
 Troque essa senha depois que criar gestão de usuários.
-
