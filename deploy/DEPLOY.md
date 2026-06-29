@@ -21,6 +21,7 @@ Edite `.env` e preencha:
 - `ADMIN_SESSION_SECRET`
 - `GROQ_API_KEY` ou `OPENAI_API_KEY`
 - `WAHA_BASE_URL`
+- `WAHA_API_KEY`
 
 Gere segredos fortes:
 
@@ -75,6 +76,7 @@ environment:
   N8N_INTERNAL_TOKEN: mesmo-token-do-env-do-atendente
   WAHA_BASE_URL: https://waha.fluirtecnologia.com.br
   WAHA_SESSION: default
+  WAHA_API_KEY: mesma-chave-do-waha
   GROQ_API_KEY: sua-chave
   OPENAI_API_KEY: sua-chave
 ```

@@ -2,61 +2,120 @@
   "name": "Fluir Atendente IA - Follow-up",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] } },
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
       "id": "schedule-hourly",
       "name": "A cada hora",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "url": "={{$env.APP_URL}}/api/n8n/followups/due",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "get-due",
       "name": "Buscar follow-ups",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [240, 0]
+      "position": [
+        240,
+        0
+      ]
     },
     {
-      "parameters": { "fieldToSplitOut": "followUps", "options": {} },
+      "parameters": {
+        "fieldToSplitOut": "followUps",
+        "options": {}
+      },
       "id": "split",
       "name": "Para cada follow-up",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "number": [{ "value1": "={{$json.lead.followUpCount}}", "operation": "smaller", "value2": 2 }],
-          "string": [{ "value1": "={{$json.lead.status}}", "operation": "notIn", "value2": "convertido,perdido,optout,aguardando_humano" }]
+          "number": [
+            {
+              "value1": "={{$json.lead.followUpCount}}",
+              "operation": "smaller",
+              "value2": 2
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{$json.lead.status}}",
+              "operation": "notIn",
+              "value2": "convertido,perdido,optout,aguardando_humano"
+            }
+          ]
         }
       },
       "id": "if-allowed",
       "name": "Respeitar optout/limite",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [720, 0]
+      "position": [
+        720,
+        0
+      ]
     },
     {
-      "parameters": { "jsCode": "return [{ json: { ...$json, text: $json.message || 'Oi, tudo bem? Passando só para saber se você ainda tem interesse. Posso te ajudar a dar continuidade? :)' } }];" },
+      "parameters": {
+        "jsCode": "return [{ json: { ...$json, text: $json.message || 'Oi, tudo bem? Passando só para saber se você ainda tem interesse. Posso te ajudar a dar continuidade? :)' } }];"
+      },
       "id": "message",
       "name": "Montar mensagem",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [960, -120]
+      "position": [
+        960,
+        -120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.WAHA_BASE_URL}}/api/sendText",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Api-Key",
+              "value": "={{.WAHA_API_KEY}}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ session: $json.tenant.wahaSessionName || $env.WAHA_SESSION, chatId: $json.lead.phone + '@c.us', text: $json.text })}}",
@@ -66,14 +125,28 @@
       "name": "Enviar WAHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, -120]
+      "position": [
+        1200,
+        -120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.APP_URL}}/api/n8n/message/outbound",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ tenantId: $json.tenantId, leadId: $json.leadId, phone: $json.lead.phone, message: $json.text, intent: 'followup', answeredByAi: true })}}",
@@ -83,14 +156,28 @@
       "name": "Registrar outbound",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1440, -120]
+      "position": [
+        1440,
+        -120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.APP_URL}}/api/n8n/followups/mark-sent",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ followUpId: $json.id })}}",
@@ -100,19 +187,94 @@
       "name": "Marcar enviado",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1680, -120]
+      "position": [
+        1680,
+        -120
+      ]
     }
   ],
   "connections": {
-    "A cada hora": { "main": [[{ "node": "Buscar follow-ups", "type": "main", "index": 0 }]] },
-    "Buscar follow-ups": { "main": [[{ "node": "Para cada follow-up", "type": "main", "index": 0 }]] },
-    "Para cada follow-up": { "main": [[{ "node": "Respeitar optout/limite", "type": "main", "index": 0 }]] },
-    "Respeitar optout/limite": { "main": [[{ "node": "Montar mensagem", "type": "main", "index": 0 }]] },
-    "Montar mensagem": { "main": [[{ "node": "Enviar WAHA", "type": "main", "index": 0 }]] },
-    "Enviar WAHA": { "main": [[{ "node": "Registrar outbound", "type": "main", "index": 0 }]] },
-    "Registrar outbound": { "main": [[{ "node": "Marcar enviado", "type": "main", "index": 0 }]] }
+    "A cada hora": {
+      "main": [
+        [
+          {
+            "node": "Buscar follow-ups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar follow-ups": {
+      "main": [
+        [
+          {
+            "node": "Para cada follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Para cada follow-up": {
+      "main": [
+        [
+          {
+            "node": "Respeitar optout/limite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respeitar optout/limite": {
+      "main": [
+        [
+          {
+            "node": "Montar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Enviar WAHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WAHA": {
+      "main": [
+        [
+          {
+            "node": "Registrar outbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar outbound": {
+      "main": [
+        [
+          {
+            "node": "Marcar enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "active": false,
   "versionId": "1"
 }

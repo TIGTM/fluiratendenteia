@@ -40,6 +40,7 @@ GROQ_API_KEY=
 OPENAI_API_KEY=
 WAHA_BASE_URL=http://localhost:3001
 WAHA_SESSION=default
+WAHA_API_KEY=
 ```
 
 Use `LLM_PROVIDER=groq` ou `LLM_PROVIDER=openai`. Se nenhuma chave for informada, o sistema usa uma resposta local de fallback para facilitar testes.
@@ -158,6 +159,7 @@ No n8n:
    - `N8N_INTERNAL_TOKEN`
    - `WAHA_BASE_URL`
    - `WAHA_SESSION`
+   - `WAHA_API_KEY`
    - `GROQ_API_KEY`
    - `OPENAI_API_KEY`
 

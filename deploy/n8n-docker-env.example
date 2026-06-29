@@ -5,6 +5,6 @@ APP_URL=https://atendenteia.fluirtecnologia.com.br
 N8N_INTERNAL_TOKEN=mesmo-token-do-env-do-atendente
 WAHA_BASE_URL=https://waha.fluirtecnologia.com.br
 WAHA_SESSION=default
+WAHA_API_KEY=mesma-chave-do-waha
 GROQ_API_KEY=
 OPENAI_API_KEY=
-

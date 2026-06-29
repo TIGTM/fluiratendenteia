@@ -2,12 +2,20 @@
   "name": "Fluir Atendente IA - Inbound WhatsApp",
   "nodes": [
     {
-      "parameters": { "httpMethod": "POST", "path": "atendente-ia/inbound", "responseMode": "responseNode", "options": {} },
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "atendente-ia/inbound",
+        "responseMode": "responseNode",
+        "options": {}
+      },
       "id": "webhook-inbound",
       "name": "Webhook WAHA",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "fluir-atendente-ia-inbound"
     },
     {
@@ -18,30 +26,58 @@
       "name": "Normalizar WAHA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 0]
+      "position": [
+        220,
+        0
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
-            { "value1": "={{$json.isGroup}}", "value2": false },
-            { "value1": "={{$json.fromMe}}", "value2": false }
+            {
+              "value1": "={{$json.isGroup}}",
+              "value2": false
+            },
+            {
+              "value1": "={{$json.fromMe}}",
+              "value2": false
+            }
           ],
-          "string": [{ "value1": "={{$json.message}}", "operation": "isNotEmpty" }]
+          "string": [
+            {
+              "value1": "={{$json.message}}",
+              "operation": "isNotEmpty"
+            }
+          ]
         }
       },
       "id": "if-valid",
       "name": "Ignorar grupos/fromMe/vazio",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [440, 0]
+      "position": [
+        440,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.APP_URL}}/api/n8n/message/inbound",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify($json)}}",
@@ -51,14 +87,28 @@
       "name": "Registrar inbound",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [680, -120]
+      "position": [
+        680,
+        -120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.APP_URL}}/api/n8n/ai/reply",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ ...$json, from: $('Normalizar WAHA').item.json.from })}}",
@@ -68,30 +118,61 @@
       "name": "Gerar resposta IA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [920, -120]
+      "position": [
+        920,
+        -120
+      ]
     },
     {
-      "parameters": { "conditions": { "boolean": [{ "value1": "={{$json.needsHuman}}", "value2": true }] } },
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.needsHuman}}",
+              "value2": true
+            }
+          ]
+        }
+      },
       "id": "if-human",
       "name": "Precisa humano?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1160, -120]
+      "position": [
+        1160,
+        -120
+      ]
     },
     {
-      "parameters": { "jsCode": "return [{ json: { ...$json, reply: 'Perfeito, vou chamar uma pessoa da equipe para continuar seu atendimento. Só um instante :)', leadStatus: 'aguardando_humano', humanPaused: true } }];" },
+      "parameters": {
+        "jsCode": "return [{ json: { ...$json, reply: 'Perfeito, vou chamar uma pessoa da equipe para continuar seu atendimento. Só um instante :)', leadStatus: 'aguardando_humano', humanPaused: true } }];"
+      },
       "id": "human-message",
       "name": "Mensagem humano",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1400, -260]
+      "position": [
+        1400,
+        -260
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.WAHA_BASE_URL}}/api/sendText",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Api-Key",
+              "value": "={{.WAHA_API_KEY}}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ session: $json.session || $json.tenant.wahaSessionName, chatId: $('Normalizar WAHA').item.json.from, text: $json.reply })}}",
@@ -101,14 +182,28 @@
       "name": "Enviar via WAHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1640, -120]
+      "position": [
+        1640,
+        -120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.APP_URL}}/api/n8n/message/outbound",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ tenantId: $json.tenant.id, leadId: $json.lead.id, phone: $json.lead.phone, message: $json.reply, intent: $json.intent, needsHuman: $json.needsHuman, answeredByAi: true })}}",
@@ -118,22 +213,48 @@
       "name": "Registrar outbound",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1880, -120]
+      "position": [
+        1880,
+        -120
+      ]
     },
     {
-      "parameters": { "conditions": { "boolean": [{ "value1": "={{$json.shouldScheduleFollowUp}}", "value2": true }] } },
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.shouldScheduleFollowUp}}",
+              "value2": true
+            }
+          ]
+        }
+      },
       "id": "if-followup",
       "name": "Agendar follow-up?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [2120, -120]
+      "position": [
+        2120,
+        -120
+      ]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "={{$env.APP_URL}}/api/n8n/lead/update",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}" }, { "name": "Content-Type", "value": "application/json" }] },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_INTERNAL_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{JSON.stringify({ leadId: $('Gerar resposta IA').item.json.lead.id, status: $('Gerar resposta IA').item.json.leadStatus, interest: $('Gerar resposta IA').item.json.detectedInterest, shouldScheduleFollowUp: true, followUpMinutes: $('Gerar resposta IA').item.json.followUpMinutes })}}",
@@ -143,31 +264,174 @@
       "name": "Atualizar lead/follow-up",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2360, -220]
+      "position": [
+        2360,
+        -220
+      ]
     },
     {
-      "parameters": { "respondWith": "json", "responseBody": "={{ { ok: true } }}", "options": {} },
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true } }}",
+        "options": {}
+      },
       "id": "respond-ok",
       "name": "Responder webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2600, -120]
+      "position": [
+        2600,
+        -120
+      ]
     }
   ],
   "connections": {
-    "Webhook WAHA": { "main": [[{ "node": "Normalizar WAHA", "type": "main", "index": 0 }]] },
-    "Normalizar WAHA": { "main": [[{ "node": "Ignorar grupos/fromMe/vazio", "type": "main", "index": 0 }]] },
-    "Ignorar grupos/fromMe/vazio": { "main": [[{ "node": "Registrar inbound", "type": "main", "index": 0 }], [{ "node": "Responder webhook", "type": "main", "index": 0 }]] },
-    "Registrar inbound": { "main": [[{ "node": "Gerar resposta IA", "type": "main", "index": 0 }]] },
-    "Gerar resposta IA": { "main": [[{ "node": "Precisa humano?", "type": "main", "index": 0 }]] },
-    "Precisa humano?": { "main": [[{ "node": "Mensagem humano", "type": "main", "index": 0 }], [{ "node": "Enviar via WAHA", "type": "main", "index": 0 }]] },
-    "Mensagem humano": { "main": [[{ "node": "Enviar via WAHA", "type": "main", "index": 0 }]] },
-    "Enviar via WAHA": { "main": [[{ "node": "Registrar outbound", "type": "main", "index": 0 }]] },
-    "Registrar outbound": { "main": [[{ "node": "Agendar follow-up?", "type": "main", "index": 0 }]] },
-    "Agendar follow-up?": { "main": [[{ "node": "Atualizar lead/follow-up", "type": "main", "index": 0 }], [{ "node": "Responder webhook", "type": "main", "index": 0 }]] },
-    "Atualizar lead/follow-up": { "main": [[{ "node": "Responder webhook", "type": "main", "index": 0 }]] }
+    "Webhook WAHA": {
+      "main": [
+        [
+          {
+            "node": "Normalizar WAHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar WAHA": {
+      "main": [
+        [
+          {
+            "node": "Ignorar grupos/fromMe/vazio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ignorar grupos/fromMe/vazio": {
+      "main": [
+        [
+          {
+            "node": "Registrar inbound",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar inbound": {
+      "main": [
+        [
+          {
+            "node": "Gerar resposta IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar resposta IA": {
+      "main": [
+        [
+          {
+            "node": "Precisa humano?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa humano?": {
+      "main": [
+        [
+          {
+            "node": "Mensagem humano",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar via WAHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem humano": {
+      "main": [
+        [
+          {
+            "node": "Enviar via WAHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar via WAHA": {
+      "main": [
+        [
+          {
+            "node": "Registrar outbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar outbound": {
+      "main": [
+        [
+          {
+            "node": "Agendar follow-up?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendar follow-up?": {
+      "main": [
+        [
+          {
+            "node": "Atualizar lead/follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar lead/follow-up": {
+      "main": [
+        [
+          {
+            "node": "Responder webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "active": false,
   "versionId": "1"
 }
