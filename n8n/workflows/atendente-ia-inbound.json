@@ -111,7 +111,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{JSON.stringify({ ...$json, from: $('Normalizar WAHA').item.json.from })}}",
+        "jsonBody": "={{JSON.stringify($json)}}",
         "options": {}
       },
       "id": "api-ai",
@@ -175,7 +175,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{JSON.stringify({ session: $json.session || $json.tenant.wahaSessionName, chatId: $('Normalizar WAHA').item.json.from, text: $json.reply })}}",
+        "jsonBody": "={{JSON.stringify({ session: $json.session || $json.tenant.wahaSessionName, chatId: $json.from, text: $json.reply })}}",
         "options": {}
       },
       "id": "send-waha",
@@ -257,7 +257,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{JSON.stringify({ leadId: $('Gerar resposta IA').item.json.lead.id, status: $('Gerar resposta IA').item.json.leadStatus, interest: $('Gerar resposta IA').item.json.detectedInterest, shouldScheduleFollowUp: true, followUpMinutes: $('Gerar resposta IA').item.json.followUpMinutes })}}",
+        "jsonBody": "={{JSON.stringify({ leadId: $json.lead.id, status: $json.leadStatus, interest: $json.detectedInterest, shouldScheduleFollowUp: true, followUpMinutes: $json.followUpMinutes })}}",
         "options": {}
       },
       "id": "update-lead",

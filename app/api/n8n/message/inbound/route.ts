@@ -56,5 +56,5 @@ export async function POST(req: NextRequest) {
     prisma.serviceItem.findMany({ where: { tenantId: tenant.id, active: true }, orderBy: { createdAt: "asc" } })
   ]);
 
-  return NextResponse.json({ tenant, lead, recentHistory: recentHistory.reverse(), knowledgeBase, services, currentMessage: message });
+  return NextResponse.json({ tenant, lead, recentHistory: recentHistory.reverse(), knowledgeBase, services, currentMessage: message, from: body.from });
 }
