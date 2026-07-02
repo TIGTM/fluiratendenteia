@@ -110,6 +110,19 @@ function inferLashName(rawMessage: string) {
 function lashSafetyReply(input: AssistantInput): AssistantReply | null {
   if (!isLashDemo(input)) return null;
   const message = normalizeText(input.currentMessage);
+  if (isGreetingMessage(message)) {
+    return {
+      reply: input.tenant.welcomeMessage,
+      intent: "greeting",
+      leadStatus: "novo",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: null,
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
   const asksHuman = message.includes("humano") || message.includes("falar com atendente") || message.includes("falar com uma pessoa") || message.includes("pessoa da equipe");
   if (asksHuman) {
     return {
@@ -475,7 +488,8 @@ Mensagem atual: ${input.currentMessage}
 
 Regras de atendimento:
 - Seja natural, consultiva e comercial. Não repita boas-vindas se a conversa já começou.
-- Junte informações do histórico. Se já houve "volume russo" e agora veio "hoje 15:30, meu nome é Rose", use técnica=volume russo, Ana Paula, hoje 15:30, nome=Rose.
+- Junte informações do histórico: técnica, horário, profissional e nome podem aparecer em mensagens diferentes.
+- Nunca invente nome da cliente. Só use detectedName e chame pelo nome se o nome apareceu literalmente na mensagem atual, no histórico ou já estiver no cadastro do lead.
 - Se faltar nome, técnica ou horário, peça só o que falta. Se houver nome+técnica+horário, confirme pré-reserva demonstrativa.
 - Natural: fio a fio. Cheio/marcado: volume brasileiro ou russo. Indecisa: compare no máximo 3 opções.
 - Não invente horários/preços/descontos/endereço. Risco nos olhos ou pedido de humano: needsHuman=true.
