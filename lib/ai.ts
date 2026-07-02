@@ -41,6 +41,11 @@ function nullableString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function truncateText(value: unknown, maxLength: number) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
 function normalizeAssistantReply(value: unknown): AssistantReply | null {
   if (!value || typeof value !== "object") return null;
   const data = value as Record<string, unknown>;
@@ -435,42 +440,46 @@ function localReply(input: AssistantInput): AssistantReply {
 }
 
 function buildLashPrompt(input: AssistantInput) {
-  const history = input.recentHistory.slice(-12).map((m) => `${m.direction === "inbound" ? "Cliente" : "Atendente"}: ${m.content}`).join("\n");
-  const services = input.services.map((item) => `${item.name} | ${item.price || "sem preço"} | ${item.duration || "sem duração"} | ${item.description || ""}`).join("\n");
-  const knowledge = input.knowledgeBase.map((item) => `P: ${item.question}\nR: ${item.answer}`).join("\n\n");
+  const query = normalizeText(`${input.currentMessage} ${input.recentHistory.slice(-6).map((m) => m.content).join(" ")}`);
+  const history = input.recentHistory.slice(-8).map((m) => `${m.direction === "inbound" ? "Cliente" : "Atendente"}: ${truncateText(m.content, 180)}`).join("\n");
+  const services = input.services.map((item) => `${item.name} | ${item.price || "sem preço"} | ${item.duration || "sem duração"}`).join("\n");
+  const relevantKnowledge = input.knowledgeBase
+    .map((item) => {
+      const text = normalizeText(`${item.question} ${item.answer} ${item.category || ""}`);
+      const score = query.split(/\s+/).filter((word) => word.length > 4 && text.includes(word)).length;
+      return { item, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map(({ item }) => `P: ${truncateText(item.question, 90)}\nR: ${truncateText(item.answer, 180)}`)
+    .join("\n\n");
 
   return `Você é uma atendente IA de WhatsApp do Studio Bella Lash, especialista em extensão de cílios.
-Objetivo: conduzir a conversa até orçamento, escolha da técnica e pré-reserva de horário, usando o histórico inteiro da conversa.
+Objetivo: conduzir orçamento, escolha da técnica e pré-reserva usando o histórico.
 
-Agenda demonstrativa disponível:
+Agenda fixa:
 - Ana Paula: hoje às 15:30, amanhã às 10:00, amanhã às 16:00, sexta às 14:00.
 - Bianca Souza: hoje às 17:00, amanhã às 11:30, amanhã às 18:00, sábado às 09:30.
 
-Serviços e valores:
+Serviços:
 ${services}
 
-Base de conhecimento:
-${knowledge}
+Base relevante:
+${relevantKnowledge || "Sem item relevante além dos serviços e agenda."}
 
 Histórico recente:
 ${history || "Sem histórico anterior."}
 
-Mensagem atual da cliente:
-${input.currentMessage}
+Mensagem atual: ${input.currentMessage}
 
 Regras de atendimento:
-- Responda em português brasileiro, com tom natural, consultivo e comercial, como uma boa atendente humana.
-- Não repita a mensagem de boas-vindas quando a conversa já começou.
-- Use o histórico para juntar informações. Exemplo: se a cliente disse "volume russo" antes e agora diz "quero hoje 15:30, meu nome é Rose", considere técnica=volume russo, horário=hoje 15:30, profissional=Ana Paula e nome=Rose.
-- Se a cliente escolher uma técnica, explique rapidamente valor, duração e próximo passo.
-- Se a cliente escolher um horário, diga a profissional correspondente. Se faltar nome ou técnica, peça apenas o que falta.
-- Se houver nome + técnica + horário, confirme uma pré-reserva demonstrativa e pergunte se pode encaminhar para uma atendente confirmar endereço, preparo e forma de pagamento.
-- Se a cliente pedir efeito natural, indique fio a fio clássico. Se pedir cheio ou marcado, indique volume brasileiro ou volume russo. Se estiver indecisa, compare no máximo 3 opções.
-- Não invente horários, preços, desconto, endereço nem políticas fora da base. Se não souber, encaminhe para humano.
-- Se houver alergia, irritação, dor, conjuntivite, sensibilidade ou risco nos olhos, needsHuman=true e leadStatus="aguardando_humano".
-- Se a cliente pedir humano/atendente/pessoa da equipe, needsHuman=true.
-- Faça uma pergunta por vez no final, quando precisar avançar.
-- Mantenha a resposta curta: 2 a 5 frases.
+- Seja natural, consultiva e comercial. Não repita boas-vindas se a conversa já começou.
+- Junte informações do histórico. Se já houve "volume russo" e agora veio "hoje 15:30, meu nome é Rose", use técnica=volume russo, Ana Paula, hoje 15:30, nome=Rose.
+- Se faltar nome, técnica ou horário, peça só o que falta. Se houver nome+técnica+horário, confirme pré-reserva demonstrativa.
+- Natural: fio a fio. Cheio/marcado: volume brasileiro ou russo. Indecisa: compare no máximo 3 opções.
+- Não invente horários/preços/descontos/endereço. Risco nos olhos ou pedido de humano: needsHuman=true.
+- Resposta curta, 2 a 4 frases, uma pergunta final no máximo.
 
 Retorne apenas JSON válido neste formato:
 {"reply":"","intent":"pricing|booking|faq|human|complaint|greeting|unknown|optout","leadStatus":"novo|em_atendimento|aguardando_humano|orcamento_enviado|agendamento_solicitado|agendado|perdido|convertido|optout","needsHuman":false,"detectedName":null,"detectedInterest":null,"shouldScheduleFollowUp":true,"followUpMinutes":180}`;
@@ -509,13 +518,14 @@ export async function generateAssistantReply(input: AssistantInput): Promise<Ass
 
   const model = process.env.LLM_MODEL || (provider === "openai" ? "gpt-4o-mini" : "llama-3.1-8b-instant");
   const baseURL = provider === "groq" ? "https://api.groq.com/openai/v1" : undefined;
-  const client = new OpenAI({ apiKey, baseURL });
+  const client = new OpenAI({ apiKey, baseURL, maxRetries: 0, timeout: 10000 });
   const prompt = isLashDemo(input) ? buildLashPrompt(input) : buildPrompt(input);
 
   try {
     const completion = await client.chat.completions.create({
       model,
       temperature: isLashDemo(input) ? 0.45 : 0.3,
+      max_tokens: isLashDemo(input) ? 450 : 700,
       response_format: { type: "json_object" },
       messages: [{ role: "user", content: prompt }]
     });
