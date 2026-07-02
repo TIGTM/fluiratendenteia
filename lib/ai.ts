@@ -32,10 +32,44 @@ function isGreetingMessage(message: string) {
   return ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"].includes(compact);
 }
 
+function findLashSlot(message: string) {
+  const slots = [
+    { tokens: ["15:30", "15h30"], professional: "Ana Paula", label: "hoje às 15:30" },
+    { tokens: ["10:00", "10h", "10h00"], professional: "Ana Paula", label: "amanhã às 10:00" },
+    { tokens: ["16:00", "16h", "16h00"], professional: "Ana Paula", label: "amanhã às 16:00" },
+    { tokens: ["14:00", "14h", "14h00"], professional: "Ana Paula", label: "sexta às 14:00" },
+    { tokens: ["17:00", "17h", "17h00"], professional: "Bianca Souza", label: "hoje às 17:00" },
+    { tokens: ["11:30", "11h30"], professional: "Bianca Souza", label: "amanhã às 11:30" },
+    { tokens: ["18:00", "18h", "18h00"], professional: "Bianca Souza", label: "amanhã às 18:00" },
+    { tokens: ["09:30", "9:30", "09h30", "9h30"], professional: "Bianca Souza", label: "sábado às 09:30" }
+  ];
+  return slots.find((slot) => slot.tokens.some((token) => message.includes(token))) || null;
+}
+
+function findLashTechnique(message: string) {
+  if (message.includes("brasileir")) return { name: "volume brasileiro", price: "R$ 170", duration: "cerca de 2h" };
+  if (message.includes("russo")) return { name: "volume russo", price: "R$ 230", duration: "cerca de 2h30" };
+  if (message.includes("hibrid")) return { name: "volume híbrido", price: "R$ 190", duration: "cerca de 2h a 2h15" };
+  if (message.includes("molhado")) return { name: "efeito molhado", price: "R$ 180", duration: "cerca de 2h" };
+  if (message.includes("fio a fio") || message.includes("classico")) return { name: "fio a fio clássico", price: "R$ 140", duration: "cerca de 1h30 a 2h" };
+  if (message.includes("lifting")) return { name: "lash lifting", price: "R$ 120", duration: "cerca de 1h" };
+  if (message.includes("manutencao")) return { name: "manutenção de cílios", price: "de R$ 90 a R$ 130", duration: "cerca de 60 a 90 min" };
+  return null;
+}
+
+function inferLashName(rawMessage: string) {
+  const firstChunk = rawMessage.split(",")[0]?.trim();
+  if (!firstChunk || firstChunk.length > 45) return null;
+  if (!/^[A-Za-zÀ-ÿ]{2,}(?:\s+[A-Za-zÀ-ÿ]{2,}){1,3}$/.test(firstChunk)) return null;
+  if (["quero hoje", "bem cheio", "volume brasileiro", "fio a fio"].includes(normalizeText(firstChunk))) return null;
+  return firstChunk;
+}
+
 function lashDemoReply(input: AssistantInput): AssistantReply | null {
   const segment = normalizeText(`${input.tenant.segment} ${input.tenant.companyName}`);
   if (!segment.includes("cilios") && !segment.includes("lash")) return null;
 
+  const rawMessage = String(input.currentMessage || "").trim();
   const message = normalizeText(input.currentMessage);
   const asksHuman = message.includes("humano") || message.includes("falar com atendente") || message.includes("falar com uma pessoa") || message.includes("pessoa da equipe");
   if (asksHuman) {
@@ -74,6 +108,77 @@ function lashDemoReply(input: AssistantInput): AssistantReply | null {
   const asksDiscount = ["caro", "desconto", "promocao", "promo"].some((word) => message.includes(word));
   const asksMaintenance = ["manutencao", "retorno", "retoque"].some((word) => message.includes(word));
   const asksRemoval = ["remover", "remocao", "tirar"].some((word) => message.includes(word));
+  const selectedSlot = findLashSlot(message);
+  const selectedTechnique = findLashTechnique(message);
+  const selectedProfessional = message.includes("ana") ? "Ana Paula" : message.includes("bianca") ? "Bianca Souza" : null;
+  const inferredName = inferLashName(rawMessage);
+  const wantsFullEffect = ["bem cheio", "cheio", "cheia", "marcado", "marcada", "destacado", "destacada", "glamouroso", "glamourosa"].some((word) => message.includes(word));
+
+  if (selectedSlot && selectedTechnique) {
+    return {
+      reply: `Perfeito${inferredName ? `, ${inferredName}` : ""}. Vou deixar uma pré-reserva demonstrativa para ${selectedTechnique.name} com ${selectedSlot.professional}, ${selectedSlot.label}. O valor é ${selectedTechnique.price} e a duração é ${selectedTechnique.duration}. Para finalizar, posso encaminhar para a atendente confirmar endereço, preparo antes do procedimento e forma de pagamento?`,
+      intent: "booking",
+      leadStatus: "agendado",
+      needsHuman: false,
+      detectedName: inferredName,
+      detectedInterest: selectedTechnique.name,
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
+  if (selectedSlot) {
+    return {
+      reply: `Esse horário está disponível com ${selectedSlot.professional}: ${selectedSlot.label}. Para eu deixar pré-reservado, me envie seu nome completo e a técnica desejada. Para primeira aplicação, as mais escolhidas são fio a fio clássico por R$ 140, volume brasileiro por R$ 170 e volume híbrido por R$ 190.`,
+      intent: "booking",
+      leadStatus: "agendamento_solicitado",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: "Horário escolhido",
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
+  if (wantsFullEffect) {
+    return {
+      reply: `Para um efeito bem cheio, eu indicaria volume russo se você quiser um olhar mais glamouroso, por R$ 230, ou volume brasileiro se quiser cheio mas mais leve para o dia a dia, por R$ 170. ${agenda} Quer que eu separe um horário com a Ana Paula ou com a Bianca Souza?`,
+      intent: "booking",
+      leadStatus: "agendamento_solicitado",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: "Volume para efeito cheio",
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
+  if (selectedTechnique) {
+    return {
+      reply: `${selectedTechnique.name} fica ${selectedTechnique.price} e dura ${selectedTechnique.duration}. ${agenda} Se quiser, já deixo uma pré-reserva: me diga o horário escolhido e seu nome completo.`,
+      intent: "pricing",
+      leadStatus: "orcamento_enviado",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: selectedTechnique.name,
+      shouldScheduleFollowUp: true,
+      followUpMinutes: 180
+    };
+  }
+
+  if (selectedProfessional) {
+    const slots = selectedProfessional === "Ana Paula" ? "A Ana Paula tem hoje às 15:30, amanhã às 10:00 ou 16:00 e sexta às 14:00." : "A Bianca Souza tem hoje às 17:00, amanhã às 11:30 ou 18:00 e sábado às 09:30.";
+    return {
+      reply: `${slots} Qual desses horários você quer pré-reservar? Também me diga a técnica desejada: fio a fio, volume brasileiro, híbrido, russo ou efeito molhado.`,
+      intent: "booking",
+      leadStatus: "agendamento_solicitado",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: selectedProfessional,
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
 
   if (asksSchedule) {
     return {
