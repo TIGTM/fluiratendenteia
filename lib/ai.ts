@@ -23,8 +23,13 @@ export type AssistantReply = {
 
 const optOutTerms = ["parar", "cancelar", "sair", "não quero", "nao quero", "não quero receber", "nao quero receber"];
 
-function normalizeText(value: string) {
-  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+function normalizeText(value: unknown) {
+  return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function isGreetingMessage(message: string) {
+  const compact = message.trim().replace(/\s+/g, " ");
+  return ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"].includes(compact);
 }
 
 function lashDemoReply(input: AssistantInput): AssistantReply | null {
@@ -63,7 +68,8 @@ function lashDemoReply(input: AssistantInput): AssistantReply | null {
   const agenda = "Tenho estas opções na agenda demonstrativa: Ana Paula hoje às 15:30, amanhã às 10:00 ou 16:00, sexta às 14:00; Bianca Souza hoje às 17:00, amanhã às 11:30 ou 18:00, sábado às 09:30.";
   const asksSchedule = ["agendar", "agenda", "horario", "amanha", "hoje", "sexta", "sabado", "disponivel", "atendentes", "profissional"].some((word) => message.includes(word));
   const asksPrice = ["valor", "preco", "quanto custa", "custa", "precos"].some((word) => message.includes(word));
-  const asksNatural = ["natural", "primeira vez", "nunca fiz", "discreto", "delicado"].some((word) => message.includes(word));
+  const asksFirstApplication = ["primeira", "primeira vez", "primeira aplicacao", "aplicacao", "aplicar"].some((word) => message.includes(word));
+  const asksNatural = ["natural", "nunca fiz", "discreto", "delicado"].some((word) => message.includes(word));
   const asksDifference = ["diferenca", "qual tecnica", "melhor tecnica", "fio a fio", "brasileiro", "hibrido", "russo"].some((word) => message.includes(word));
   const asksDiscount = ["caro", "desconto", "promocao", "promo"].some((word) => message.includes(word));
   const asksMaintenance = ["manutencao", "retorno", "retoque"].some((word) => message.includes(word));
@@ -108,7 +114,7 @@ function lashDemoReply(input: AssistantInput): AssistantReply | null {
     };
   }
 
-  if (asksNatural) {
+  if (asksNatural || asksFirstApplication) {
     return {
       reply: `Para primeira vez e efeito natural, eu indicaria fio a fio clássico. Ele realça o olhar de forma leve, sem ficar artificial. O valor é R$ 140, ou R$ 120 com a condição de primeira aplicação desta semana. ${agenda} Quer que eu pré-reserve um desses horários?`,
       intent: "booking",
@@ -160,7 +166,7 @@ function lashDemoReply(input: AssistantInput): AssistantReply | null {
     };
   }
 
-  if (["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"].some((word) => message.includes(word))) {
+  if (isGreetingMessage(message)) {
     return {
       reply: input.tenant.welcomeMessage,
       intent: "greeting",
@@ -173,7 +179,16 @@ function lashDemoReply(input: AssistantInput): AssistantReply | null {
     };
   }
 
-  return null;
+  return {
+    reply: `Certo. Eu consigo te ajudar com valores, escolha da técnica e agenda com a Ana Paula ou a Bianca Souza. As opções mais procuradas são fio a fio clássico para efeito natural, volume brasileiro para mais destaque e volume híbrido para equilibrar naturalidade e volume. ${agenda} Você quer ver valores, escolher a técnica ou já separar um horário?`,
+    intent: "faq",
+    leadStatus: "em_atendimento",
+    needsHuman: false,
+    detectedName: null,
+    detectedInterest: "Extensão de cílios",
+    shouldScheduleFollowUp: true,
+    followUpMinutes: 180
+  };
 }
 
 function localReply(input: AssistantInput): AssistantReply {
