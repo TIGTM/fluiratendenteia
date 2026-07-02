@@ -22,9 +22,46 @@ export type AssistantReply = {
 };
 
 const optOutTerms = ["parar", "cancelar", "sair", "não quero", "nao quero", "não quero receber", "nao quero receber"];
+const assistantIntents: AssistantReply["intent"][] = ["pricing", "booking", "faq", "human", "complaint", "greeting", "unknown", "optout"];
+const leadStatuses: AssistantReply["leadStatus"][] = ["novo", "em_atendimento", "aguardando_humano", "orcamento_enviado", "agendamento_solicitado", "agendado", "perdido", "convertido", "optout"];
 
 function normalizeText(value: unknown) {
   return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function isAssistantIntent(value: unknown): value is AssistantReply["intent"] {
+  return typeof value === "string" && assistantIntents.includes(value as AssistantReply["intent"]);
+}
+
+function isLeadStatus(value: unknown): value is AssistantReply["leadStatus"] {
+  return typeof value === "string" && leadStatuses.includes(value as AssistantReply["leadStatus"]);
+}
+
+function nullableString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeAssistantReply(value: unknown): AssistantReply | null {
+  if (!value || typeof value !== "object") return null;
+  const data = value as Record<string, unknown>;
+  const reply = nullableString(data.reply);
+  if (!reply) return null;
+
+  return {
+    reply,
+    intent: isAssistantIntent(data.intent) ? data.intent : "unknown",
+    leadStatus: isLeadStatus(data.leadStatus) ? data.leadStatus : "em_atendimento",
+    needsHuman: data.needsHuman === true,
+    detectedName: nullableString(data.detectedName),
+    detectedInterest: nullableString(data.detectedInterest),
+    shouldScheduleFollowUp: data.shouldScheduleFollowUp === true,
+    followUpMinutes: typeof data.followUpMinutes === "number" && Number.isFinite(data.followUpMinutes) ? Math.max(0, Math.round(data.followUpMinutes)) : 180
+  };
+}
+
+function isLashDemo(input: AssistantInput) {
+  const segment = normalizeText(`${input.tenant.segment} ${input.tenant.companyName}`);
+  return segment.includes("cilios") || segment.includes("lash");
 }
 
 function isGreetingMessage(message: string) {
@@ -65,9 +102,42 @@ function inferLashName(rawMessage: string) {
   return firstChunk;
 }
 
+function lashSafetyReply(input: AssistantInput): AssistantReply | null {
+  if (!isLashDemo(input)) return null;
+  const message = normalizeText(input.currentMessage);
+  const asksHuman = message.includes("humano") || message.includes("falar com atendente") || message.includes("falar com uma pessoa") || message.includes("pessoa da equipe");
+  if (asksHuman) {
+    return {
+      reply: "Perfeito, vou chamar uma pessoa da equipe para continuar seu atendimento. Só um instante :)",
+      intent: "human",
+      leadStatus: "aguardando_humano",
+      needsHuman: true,
+      detectedName: null,
+      detectedInterest: null,
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
+  const hasRisk = ["alergia", "coceira", "irritacao", "irritada", "conjuntivite", "sensibilidade", "arde", "ardendo"].some((word) => message.includes(word));
+  if (hasRisk) {
+    return {
+      reply: "Obrigada por avisar. Como envolve sensibilidade ou alergia na região dos olhos, prefiro chamar uma atendente para avaliar com segurança antes de agendar. Vou encaminhar para uma pessoa da equipe, combinado?",
+      intent: "human",
+      leadStatus: "aguardando_humano",
+      needsHuman: true,
+      detectedName: null,
+      detectedInterest: "Avaliação de sensibilidade",
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
+  return null;
+}
+
 function lashDemoReply(input: AssistantInput): AssistantReply | null {
-  const segment = normalizeText(`${input.tenant.segment} ${input.tenant.companyName}`);
-  if (!segment.includes("cilios") && !segment.includes("lash")) return null;
+  if (!isLashDemo(input)) return null;
 
   const rawMessage = String(input.currentMessage || "").trim();
   const message = normalizeText(input.currentMessage);
@@ -364,6 +434,48 @@ function localReply(input: AssistantInput): AssistantReply {
   };
 }
 
+function buildLashPrompt(input: AssistantInput) {
+  const history = input.recentHistory.slice(-12).map((m) => `${m.direction === "inbound" ? "Cliente" : "Atendente"}: ${m.content}`).join("\n");
+  const services = input.services.map((item) => `${item.name} | ${item.price || "sem preço"} | ${item.duration || "sem duração"} | ${item.description || ""}`).join("\n");
+  const knowledge = input.knowledgeBase.map((item) => `P: ${item.question}\nR: ${item.answer}`).join("\n\n");
+
+  return `Você é uma atendente IA de WhatsApp do Studio Bella Lash, especialista em extensão de cílios.
+Objetivo: conduzir a conversa até orçamento, escolha da técnica e pré-reserva de horário, usando o histórico inteiro da conversa.
+
+Agenda demonstrativa disponível:
+- Ana Paula: hoje às 15:30, amanhã às 10:00, amanhã às 16:00, sexta às 14:00.
+- Bianca Souza: hoje às 17:00, amanhã às 11:30, amanhã às 18:00, sábado às 09:30.
+
+Serviços e valores:
+${services}
+
+Base de conhecimento:
+${knowledge}
+
+Histórico recente:
+${history || "Sem histórico anterior."}
+
+Mensagem atual da cliente:
+${input.currentMessage}
+
+Regras de atendimento:
+- Responda em português brasileiro, com tom natural, consultivo e comercial, como uma boa atendente humana.
+- Não repita a mensagem de boas-vindas quando a conversa já começou.
+- Use o histórico para juntar informações. Exemplo: se a cliente disse "volume russo" antes e agora diz "quero hoje 15:30, meu nome é Rose", considere técnica=volume russo, horário=hoje 15:30, profissional=Ana Paula e nome=Rose.
+- Se a cliente escolher uma técnica, explique rapidamente valor, duração e próximo passo.
+- Se a cliente escolher um horário, diga a profissional correspondente. Se faltar nome ou técnica, peça apenas o que falta.
+- Se houver nome + técnica + horário, confirme uma pré-reserva demonstrativa e pergunte se pode encaminhar para uma atendente confirmar endereço, preparo e forma de pagamento.
+- Se a cliente pedir efeito natural, indique fio a fio clássico. Se pedir cheio ou marcado, indique volume brasileiro ou volume russo. Se estiver indecisa, compare no máximo 3 opções.
+- Não invente horários, preços, desconto, endereço nem políticas fora da base. Se não souber, encaminhe para humano.
+- Se houver alergia, irritação, dor, conjuntivite, sensibilidade ou risco nos olhos, needsHuman=true e leadStatus="aguardando_humano".
+- Se a cliente pedir humano/atendente/pessoa da equipe, needsHuman=true.
+- Faça uma pergunta por vez no final, quando precisar avançar.
+- Mantenha a resposta curta: 2 a 5 frases.
+
+Retorne apenas JSON válido neste formato:
+{"reply":"","intent":"pricing|booking|faq|human|complaint|greeting|unknown|optout","leadStatus":"novo|em_atendimento|aguardando_humano|orcamento_enviado|agendamento_solicitado|agendado|perdido|convertido|optout","needsHuman":false,"detectedName":null,"detectedInterest":null,"shouldScheduleFollowUp":true,"followUpMinutes":180}`;
+}
+
 function buildPrompt(input: AssistantInput) {
   return `Você é uma atendente IA para WhatsApp da empresa ${input.tenant.companyName}.
 Responda em português brasileiro, de forma educada, objetiva e natural.
@@ -387,27 +499,30 @@ Retorne apenas JSON válido neste formato:
 }
 
 export async function generateAssistantReply(input: AssistantInput): Promise<AssistantReply> {
-  const specializedReply = lashDemoReply(input);
-  if (specializedReply) return specializedReply;
+  const safetyReply = lashSafetyReply(input);
+  if (safetyReply) return safetyReply;
 
   const provider = (process.env.LLM_PROVIDER || "local").toLowerCase();
-  const apiKey = provider === "openai" ? process.env.OPENAI_API_KEY : process.env.GROQ_API_KEY;
-  if (!apiKey) return localReply(input);
+  const apiKey = provider === "openai" ? process.env.OPENAI_API_KEY : provider === "groq" ? process.env.GROQ_API_KEY : undefined;
+  const fallbackReply = lashDemoReply(input) || localReply(input);
+  if (!apiKey) return fallbackReply;
 
   const model = process.env.LLM_MODEL || (provider === "openai" ? "gpt-4o-mini" : "llama-3.1-8b-instant");
   const baseURL = provider === "groq" ? "https://api.groq.com/openai/v1" : undefined;
   const client = new OpenAI({ apiKey, baseURL });
+  const prompt = isLashDemo(input) ? buildLashPrompt(input) : buildPrompt(input);
 
   try {
     const completion = await client.chat.completions.create({
       model,
-      temperature: 0.3,
+      temperature: isLashDemo(input) ? 0.45 : 0.3,
       response_format: { type: "json_object" },
-      messages: [{ role: "user", content: buildPrompt(input) }]
+      messages: [{ role: "user", content: prompt }]
     });
-    return JSON.parse(completion.choices[0]?.message?.content || "{}") as AssistantReply;
+    const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+    return normalizeAssistantReply(parsed) || fallbackReply;
   } catch (error) {
     console.error("AI provider failed, using local fallback", error);
-    return localReply(input);
+    return fallbackReply;
   }
 }
