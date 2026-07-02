@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const message = String(body.message || "");
   const normalized = message.toLowerCase();
   const isOptOut = optOutTerms.some((term) => normalized.includes(term));
-  const humanAsked = normalized.includes("humano") || normalized.includes("atendente") || normalized.includes("pessoa");
+  const humanAsked = normalized.includes("humano") || normalized.includes("falar com atendente") || normalized.includes("falar com uma pessoa") || normalized.includes("pessoa da equipe");
 
   const lead = await prisma.lead.upsert({
     where: { tenantId_phone: { tenantId: tenant.id, phone: body.phone } },
