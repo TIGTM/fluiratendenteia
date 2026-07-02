@@ -51,12 +51,22 @@ function normalizeAssistantReply(value: unknown): AssistantReply | null {
   const data = value as Record<string, unknown>;
   const reply = nullableString(data.reply);
   if (!reply) return null;
+  let intent: AssistantReply["intent"] = isAssistantIntent(data.intent) ? data.intent : "unknown";
+  let leadStatus: AssistantReply["leadStatus"] = isLeadStatus(data.leadStatus) ? data.leadStatus : "em_atendimento";
+  const needsHuman = data.needsHuman === true || intent === "human";
+
+  if (needsHuman) {
+    intent = "human";
+    leadStatus = "aguardando_humano";
+  } else if (leadStatus === "aguardando_humano") {
+    leadStatus = intent === "booking" ? "agendamento_solicitado" : intent === "pricing" ? "orcamento_enviado" : "em_atendimento";
+  }
 
   return {
     reply,
-    intent: isAssistantIntent(data.intent) ? data.intent : "unknown",
-    leadStatus: isLeadStatus(data.leadStatus) ? data.leadStatus : "em_atendimento",
-    needsHuman: data.needsHuman === true,
+    intent,
+    leadStatus,
+    needsHuman,
     detectedName: nullableString(data.detectedName),
     detectedInterest: nullableString(data.detectedInterest),
     shouldScheduleFollowUp: data.shouldScheduleFollowUp === true,
@@ -100,6 +110,11 @@ function findLashTechnique(message: string) {
 }
 
 function inferLashName(rawMessage: string) {
+  const explicitName = rawMessage.match(/(?:meu nome\s+(?:é|e)|me chamo|sou)\s+([A-Za-zÀ-ÿ]{2,}(?:\s+[A-Za-zÀ-ÿ]{2,}){0,3})/i)?.[1]?.trim();
+  if (explicitName) {
+    return explicitName.split(/\s+/).map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`).join(" ");
+  }
+
   const firstChunk = rawMessage.split(",")[0]?.trim();
   if (!firstChunk || firstChunk.length > 45) return null;
   if (!/^[A-Za-zÀ-ÿ]{2,}(?:\s+[A-Za-zÀ-ÿ]{2,}){1,3}$/.test(firstChunk)) return null;
@@ -151,6 +166,22 @@ function lashSafetyReply(input: AssistantInput): AssistantReply | null {
     };
   }
 
+  const selectedSlot = findLashSlot(message);
+  const selectedTechnique = findLashTechnique(message);
+  const isSimpleTechniqueChoice = selectedTechnique && !selectedSlot && message.split(/\s+/).length <= 4;
+  if (isSimpleTechniqueChoice) {
+    return {
+      reply: `${selectedTechnique.name} fica ${selectedTechnique.price} e dura ${selectedTechnique.duration}. Tenho horários com a Ana Paula hoje às 15:30, amanhã às 10:00 ou 16:00, e com a Bianca Souza hoje às 17:00, amanhã às 11:30 ou 18:00. Qual horário você prefere?`,
+      intent: "pricing",
+      leadStatus: "orcamento_enviado",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: selectedTechnique.name,
+      shouldScheduleFollowUp: true,
+      followUpMinutes: 180
+    };
+  }
+
   return null;
 }
 
@@ -198,18 +229,20 @@ function lashDemoReply(input: AssistantInput): AssistantReply | null {
   const asksRemoval = ["remover", "remocao", "tirar"].some((word) => message.includes(word));
   const selectedSlot = findLashSlot(message);
   const selectedTechnique = findLashTechnique(message);
+  const savedTechnique = findLashTechnique(normalizeText(input.lead.interest));
+  const effectiveTechnique = selectedTechnique || savedTechnique;
   const selectedProfessional = message.includes("ana") ? "Ana Paula" : message.includes("bianca") ? "Bianca Souza" : null;
   const inferredName = inferLashName(rawMessage);
   const wantsFullEffect = ["bem cheio", "cheio", "cheia", "marcado", "marcada", "destacado", "destacada", "glamouroso", "glamourosa"].some((word) => message.includes(word));
 
-  if (selectedSlot && selectedTechnique) {
+  if (selectedSlot && effectiveTechnique) {
     return {
-      reply: `Perfeito${inferredName ? `, ${inferredName}` : ""}. Vou deixar uma pré-reserva demonstrativa para ${selectedTechnique.name} com ${selectedSlot.professional}, ${selectedSlot.label}. O valor é ${selectedTechnique.price} e a duração é ${selectedTechnique.duration}. Para finalizar, posso encaminhar para a atendente confirmar endereço, preparo antes do procedimento e forma de pagamento?`,
+      reply: `Perfeito${inferredName ? `, ${inferredName}` : ""}. Vou deixar uma pré-reserva demonstrativa para ${effectiveTechnique.name} com ${selectedSlot.professional}, ${selectedSlot.label}. O valor é ${effectiveTechnique.price} e a duração é ${effectiveTechnique.duration}. Para finalizar, posso encaminhar para a atendente confirmar endereço, preparo antes do procedimento e forma de pagamento?`,
       intent: "booking",
       leadStatus: "agendado",
       needsHuman: false,
       detectedName: inferredName,
-      detectedInterest: selectedTechnique.name,
+      detectedInterest: effectiveTechnique.name,
       shouldScheduleFollowUp: false,
       followUpMinutes: 0
     };
@@ -484,11 +517,14 @@ ${relevantKnowledge || "Sem item relevante além dos serviços e agenda."}
 Histórico recente:
 ${history || "Sem histórico anterior."}
 
+Interesse salvo no lead: ${input.lead.interest || "nenhum"}
 Mensagem atual: ${input.currentMessage}
 
 Regras de atendimento:
 - Seja natural, consultiva e comercial. Não repita boas-vindas se a conversa já começou.
 - Junte informações do histórico: técnica, horário, profissional e nome podem aparecer em mensagens diferentes.
+- Se houver interesse salvo no lead e a mensagem atual trouxer horário/nome, use esse interesse como técnica escolhida.
+- Se a cliente disser "primeira" ou "primeira aplicação", recomende uma técnica antes de tentar marcar: fio a fio para natural, volume brasileiro para marcado leve.
 - Nunca invente nome da cliente. Só use detectedName e chame pelo nome se o nome apareceu literalmente na mensagem atual, no histórico ou já estiver no cadastro do lead.
 - Se faltar nome, técnica ou horário, peça só o que falta. Se houver nome+técnica+horário, confirme pré-reserva demonstrativa.
 - Natural: fio a fio. Cheio/marcado: volume brasileiro ou russo. Indecisa: compare no máximo 3 opções.
