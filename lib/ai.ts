@@ -168,6 +168,22 @@ function lashSafetyReply(input: AssistantInput): AssistantReply | null {
 
   const selectedSlot = findLashSlot(message);
   const selectedTechnique = findLashTechnique(message);
+  const savedTechnique = findLashTechnique(normalizeText(input.lead.interest));
+  const effectiveTechnique = selectedTechnique || savedTechnique;
+  const inferredName = inferLashName(String(input.currentMessage || ""));
+  if (selectedSlot && effectiveTechnique) {
+    return {
+      reply: `Perfeito${inferredName ? `, ${inferredName}` : ""}. Vou deixar uma pré-reserva demonstrativa para ${effectiveTechnique.name} com ${selectedSlot.professional}, ${selectedSlot.label}. O valor é ${effectiveTechnique.price} e a duração é ${effectiveTechnique.duration}. Para finalizar, posso encaminhar para a atendente confirmar endereço, preparo antes do procedimento e forma de pagamento?`,
+      intent: "booking",
+      leadStatus: "agendado",
+      needsHuman: false,
+      detectedName: inferredName,
+      detectedInterest: effectiveTechnique.name,
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
+    };
+  }
+
   const isSimpleTechniqueChoice = selectedTechnique && !selectedSlot && message.split(/\s+/).length <= 4;
   if (isSimpleTechniqueChoice) {
     return {
@@ -179,6 +195,20 @@ function lashSafetyReply(input: AssistantInput): AssistantReply | null {
       detectedInterest: selectedTechnique.name,
       shouldScheduleFollowUp: true,
       followUpMinutes: 180
+    };
+  }
+
+  const asksFirstApplication = ["primeira", "primeira vez", "primeira aplicacao", "aplicacao", "aplicar"].some((word) => message.includes(word));
+  if (asksFirstApplication) {
+    return {
+      reply: "Perfeito. Para primeira aplicação, eu indicaria fio a fio clássico se você quer um resultado bem natural, ou volume brasileiro se quer um olhar mais marcado sem pesar. O fio a fio fica R$ 140 e o volume brasileiro R$ 170; nesta semana temos R$ 20 de desconto nessas duas técnicas. Você prefere um efeito mais natural ou mais marcado?",
+      intent: "booking",
+      leadStatus: "agendamento_solicitado",
+      needsHuman: false,
+      detectedName: null,
+      detectedInterest: "Primeira aplicação de cílios",
+      shouldScheduleFollowUp: false,
+      followUpMinutes: 0
     };
   }
 
